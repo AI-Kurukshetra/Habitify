@@ -12,13 +12,22 @@ export function NewAreaModal() {
   const { newAreaModalOpen, setNewAreaModalOpen, addArea } = useDashboard();
   const [name, setName] = useState('');
   const [color, setColor] = useState(COLORS[0]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!name.trim()) return;
-    addArea({ name: name.trim(), color });
-    setName('');
-    setColor(COLORS[0]);
-    setNewAreaModalOpen(false);
+    
+    setIsLoading(true);
+    try {
+      await addArea({ name: name.trim(), color });
+      setName('');
+      setColor(COLORS[0]);
+      setNewAreaModalOpen(false);
+    } catch (error) {
+      console.error('Error creating area:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleOpenChange = (open: boolean) => {
@@ -36,10 +45,12 @@ export function NewAreaModal() {
       title="New Area"
       footer={
         <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={() => handleOpenChange(false)}>
+          <Button variant="secondary" onClick={() => handleOpenChange(false)} disabled={isLoading}>
             Cancel
           </Button>
-          <Button onClick={handleSave}>Save</Button>
+          <Button onClick={handleSave} disabled={isLoading || !name.trim()}>
+            {isLoading ? 'Creating...' : 'Save'}
+          </Button>
         </div>
       }
     >
@@ -52,6 +63,8 @@ export function NewAreaModal() {
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. todo list"
             className="w-full rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:border-[#2a67f4] focus:outline-none focus:ring-1 focus:ring-[#2a67f4]"
+            disabled={isLoading}
+            autoFocus
           />
         </div>
         <div>
@@ -62,6 +75,7 @@ export function NewAreaModal() {
                 key={c}
                 type="button"
                 onClick={() => setColor(c)}
+                disabled={isLoading}
                 className={cn(
                   'h-8 w-8 rounded-full border-2 transition',
                   color === c ? 'border-[#111827] scale-110' : 'border-transparent'

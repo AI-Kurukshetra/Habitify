@@ -42,7 +42,8 @@ export type HabitItem = {
   
   // Schedule
   frequency?: FrequencySchedule;
-  timeOfDay?: string; // e.g., "08:00", "14:30"
+  /** Time of day: "Morning" | "Afternoon" | "Evening" or array of them (for filtering) */
+  timeOfDay?: string | string[];
   startDate?: string; // YYYY-MM-DD
   endDate?: string; // YYYY-MM-DD (optional)
   

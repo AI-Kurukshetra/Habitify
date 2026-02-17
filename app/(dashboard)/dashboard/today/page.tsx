@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   PlusIcon,
@@ -17,6 +18,7 @@ import { HabitTimer } from '@/components/dashboard/HabitTimer';
 import { StreakDisplay } from '@/components/dashboard/StreakDisplay';
 import { useDashboard } from '@/contexts/DashboardContext';
 import type { HabitItem, StreakData } from '@/lib/dashboard-types';
+import { habitMatchesTimeOfDay, newHabitPayloadToItem, type TimeOfDayFilter } from '@/lib/habitUtils';
 
 const MOODS = [
   { level: 1, emoji: '😢', label: 'Bad' },
@@ -28,7 +30,12 @@ const MOODS = [
 type LogEntry_Internal = { status: 'completed' | 'skipped' | 'missed'; value?: number; durationMinutes?: number; note?: string };
 
 export default function TodayPage() {
-  const { habits, setHabits, areas } = useDashboard();
+  const searchParams = useSearchParams();
+  const timeFilter = searchParams?.get('filter') as TimeOfDayFilter | null;
+  const { habits, areas, timeOfDaySlots, addHabit } = useDashboard();
+  const displayHabits = timeFilter
+    ? habits.filter((h) => habitMatchesTimeOfDay(h, timeFilter as string))
+    : habits;
   const [newHabitOpen, setNewHabitOpen] = useState(false);
   const [moodLevel, setMoodLevel] = useState<number | null>(null);
   const [habitLogs, setHabitLogs] = useState<Record<string, LogEntry_Internal>>({});
@@ -54,8 +61,8 @@ export default function TodayPage() {
     setStreakData((prev) => ({ ...prev, ...newStreaks }));
   }, [habits]);
 
-  const completedCount = habits.filter((h) => habitLogs[h.id] && habitLogs[h.id].status === 'completed').length;
-  const totalCount = habits.length;
+  const completedCount = displayHabits.filter((h) => habitLogs[h.id] && habitLogs[h.id].status === 'completed').length;
+  const totalCount = displayHabits.length;
   const progressPercent = totalCount ? Math.round((completedCount / totalCount) * 100) : 0;
 
   const toggleComplete = useCallback((id: string) => {
@@ -74,21 +81,10 @@ export default function TodayPage() {
   }, []);
 
   const handleSaveHabit = useCallback(
-    (habit: { name: string; repeat: string; goal: string; timeOfDay: string[]; startDate: string; reminders: string[]; area: string; type?: 'checkbox' | 'number' | 'duration' }) => {
-      setHabits((prev) => [
-        ...prev,
-        {
-          id: String(Date.now()),
-          name: habit.name,
-          done: 0,
-          goal: parseInt(habit.goal, 10) || 1,
-          type: (habit.type ?? 'checkbox') as HabitItem['type'],
-          areaId: habit.area || undefined,
-          frequency: { type: 'daily' },
-        } as HabitItem,
-      ]);
+    async (payload: Parameters<typeof newHabitPayloadToItem>[0]) => {
+      await addHabit(newHabitPayloadToItem(payload));
     },
-    [setHabits]
+    [addHabit]
   );
 
   return (
@@ -143,7 +139,7 @@ export default function TodayPage() {
 
       {/* Habits list */}
       <div className="flex-1 px-4 py-4 sm:px-6 pb-24">
-        {habits.length === 0 ? (
+        {displayHabits.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
             <div className="text-4xl mb-3">🎯</div>
             <p className="text-lg font-medium text-[#111827]">No habits yet</p>
@@ -151,7 +147,7 @@ export default function TodayPage() {
           </div>
         ) : (
           <ul className="space-y-2">
-            {habits.map((habit) => {
+            {displayHabits.map((habit) => {
               const log = habitLogs[habit.id];
               const completed = log && log.status === 'completed';
               const isDuration = habit.type === 'duration';
@@ -257,6 +253,7 @@ export default function TodayPage() {
         open={newHabitOpen}
         onOpenChange={setNewHabitOpen}
         onSave={handleSaveHabit}
+        timeOfDayOptions={timeOfDaySlots.length ? timeOfDaySlots.map((s) => s.name) : undefined}
       />
 
       {cellEditor && (

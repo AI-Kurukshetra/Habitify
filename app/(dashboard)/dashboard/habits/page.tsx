@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import {
   PlusIcon,
@@ -18,9 +18,28 @@ import { NewHabitModal } from '@/components/dashboard/NewHabitModal';
 import { EditHabitModal } from '@/components/dashboard/EditHabitModal';
 import type { HabitItem } from '@/lib/dashboard-types';
 import { useDashboard } from '@/contexts/DashboardContext';
+import { habitMatchesTimeOfDay, newHabitPayloadToItem, type TimeOfDayFilter } from '@/lib/habitUtils';
+
+function slotFilterKey(name: string): string {
+  return name.toLowerCase().trim().replace(/\s+/g, '-');
+}
+
+const DEFAULT_TIME_OPTIONS = [
+  { value: 'any', label: 'Any Time' },
+  { value: 'morning', label: 'Morning' },
+  { value: 'afternoon', label: 'Afternoon' },
+  { value: 'evening', label: 'Evening' },
+];
 
 export default function HabitsPage() {
-  const { habits, setHabits, areas } = useDashboard();
+  const { habits, areas, timeOfDaySlots, addHabit, updateHabit, deleteHabit, archiveHabit } = useDashboard();
+  const timeFilterOptions = useMemo(() => {
+    if (timeOfDaySlots.length === 0) return DEFAULT_TIME_OPTIONS;
+    return [
+      { value: 'any', label: 'Any Time' },
+      ...timeOfDaySlots.map((s) => ({ value: slotFilterKey(s.name), label: s.name })),
+    ];
+  }, [timeOfDaySlots]);
   const [newHabitOpen, setNewHabitOpen] = useState(false);
   const [editHabit, setEditHabit] = useState<HabitItem | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
@@ -37,52 +56,52 @@ export default function HabitsPage() {
     if (statusFilter === 'archived' && !h.isArchived) return false;
     if (searchQuery.trim() && !h.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     if (areaFilter && h.areaId !== areaFilter) return false;
+    if (timeFilter !== 'any' && !habitMatchesTimeOfDay(h, timeFilter as TimeOfDayFilter)) return false;
     return true;
   });
 
   const countByArea = (areaId: string | undefined) =>
     habits.filter((h) => !h.isArchived && (areaId ? h.areaId === areaId : !h.areaId)).length;
 
+  const countByTime = (t: string) =>
+    t === 'any' ? activeHabits.length : activeHabits.filter((h) => habitMatchesTimeOfDay(h, t as TimeOfDayFilter)).length;
+
   const handleSaveHabit = useCallback(
-    (habit: { name: string; repeat: string; goal: string; timeOfDay: string[]; startDate: string; reminders: string[]; area: string; type?: 'checkbox' | 'number' | 'duration' }) => {
-      setHabits((prev) => [
-        ...prev,
-        {
-          id: String(Date.now()),
-          name: habit.name,
-          done: 0,
-          goal: parseInt(habit.goal, 10) || 1,
-          type: (habit.type ?? 'checkbox') as HabitItem['type'],
-          areaId: habit.area || undefined,
-          frequency: { type: 'daily' },
-        } as HabitItem,
-      ]);
+    async (payload: Parameters<typeof newHabitPayloadToItem>[0]) => {
+      await addHabit(newHabitPayloadToItem(payload));
     },
-    [setHabits]
+    [addHabit]
   );
 
   const handleUpdateHabit = useCallback((updated: HabitItem) => {
-    setHabits((prev) => prev.map((h) => (h.id === updated.id ? updated : h)));
+    updateHabit(updated.id, {
+      name: updated.name,
+      description: updated.description,
+      goal: updated.goal,
+      areaId: updated.areaId,
+      isArchived: updated.isArchived,
+    });
     setEditHabit(null);
     setMenuOpenId(null);
-  }, [setHabits]);
+  }, [updateHabit]);
 
-  const duplicateHabit = useCallback((habit: HabitItem) => {
-    setHabits((prev) => [...prev, { ...habit, id: String(Date.now()), name: `${habit.name} (copy)` }]);
+  const duplicateHabit = useCallback(async (habit: HabitItem) => {
+    const { id: _id, done: _d, createdAt: _c, updatedAt: _u, ...rest } = habit;
+    await addHabit({ ...rest, name: `${habit.name} (copy)` });
     setMenuOpenId(null);
-  }, [setHabits]);
+  }, [addHabit]);
 
-  const archiveHabit = useCallback((id: string) => {
-    setHabits((prev) => prev.map((h) => (h.id === id ? { ...h, isArchived: true } : h)));
+  const archiveHabitLocal = useCallback((id: string) => {
+    archiveHabit(id);
     setMenuOpenId(null);
-  }, [setHabits]);
+  }, [archiveHabit]);
 
-  const deleteHabit = useCallback((id: string) => {
-    setHabits((prev) => prev.filter((h) => h.id !== id));
+  const deleteHabitLocal = useCallback((id: string) => {
+    deleteHabit(id);
     setMenuOpenId(null);
     setEditHabit((h) => (h?.id === id ? null : h));
     setSelectedHabitId((sid) => (sid === id ? null : sid));
-  }, [setHabits]);
+  }, [deleteHabit]);
 
   const displayTime = (h: HabitItem) => h.reminders?.[0] ?? h.timeOfDay ?? '09:00';
 
@@ -140,16 +159,16 @@ export default function HabitsPage() {
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wider text-[#6B7280] mb-2">Time of Day</p>
             <div className="space-y-1">
-              {['any', 'morning', 'afternoon', 'evening'].map((t) => (
+              {timeFilterOptions.map(({ value, label }) => (
                 <button
-                  key={t}
+                  key={value}
                   type="button"
-                  onClick={() => setTimeFilter(t)}
-                  className={cn('flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm', timeFilter === t ? 'bg-[#EFF6FF] text-[#2a67f4] font-medium' : 'text-[#374151] hover:bg-[#E5E7EB]')}
+                  onClick={() => setTimeFilter(value)}
+                  className={cn('flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm', timeFilter === value ? 'bg-[#EFF6FF] text-[#2a67f4] font-medium' : 'text-[#374151] hover:bg-[#E5E7EB]')}
                 >
-                  {t === 'any' ? <span className="w-4 h-4" /> : t === 'evening' ? <MoonIcon size={16} /> : <SunIcon size={16} />}
-                  {t === 'any' ? 'Any Time' : t.charAt(0).toUpperCase() + t.slice(1)}
-                  <span className="ml-auto text-xs text-[#6B7280]">{t === 'any' ? activeHabits.length : 0}</span>
+                  {value === 'any' ? <span className="w-4 h-4" /> : value === 'evening' ? <MoonIcon size={16} /> : <SunIcon size={16} />}
+                  {label}
+                  <span className="ml-auto text-xs text-[#6B7280]">{countByTime(value)}</span>
                 </button>
               ))}
             </div>
@@ -223,10 +242,10 @@ export default function HabitsPage() {
                           <button type="button" onClick={() => duplicateHabit(habit)} className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-[#374151] hover:bg-[#F3F4F6]">
                             <CopyIcon size={16} /> Duplicate
                           </button>
-                          <button type="button" onClick={() => archiveHabit(habit.id)} className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-[#374151] hover:bg-[#F3F4F6]">
+                          <button type="button" onClick={() => archiveHabitLocal(habit.id)} className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-[#374151] hover:bg-[#F3F4F6]">
                             <ArchiveIcon size={16} /> Archive
                           </button>
-                          <button type="button" onClick={() => deleteHabit(habit.id)} className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-[#EF4444] hover:bg-[#FEF2F2]">
+                          <button type="button" onClick={() => deleteHabitLocal(habit.id)} className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-[#EF4444] hover:bg-[#FEF2F2]">
                             <TrashIcon size={16} /> Delete
                           </button>
                         </div>
@@ -248,7 +267,7 @@ export default function HabitsPage() {
         </div>
       </div>
 
-      <NewHabitModal open={newHabitOpen} onOpenChange={setNewHabitOpen} onSave={handleSaveHabit} areas={areas} />
+      <NewHabitModal open={newHabitOpen} onOpenChange={setNewHabitOpen} onSave={handleSaveHabit} areas={areas} timeOfDayOptions={timeOfDaySlots.length ? timeOfDaySlots.map((s) => s.name) : undefined} />
       <EditHabitModal habit={editHabit} onClose={() => setEditHabit(null)} onSave={handleUpdateHabit} areas={areas} />
     </div>
   );

@@ -49,7 +49,7 @@ export function DashboardLayoutShell({ userLabel, children }: DashboardLayoutShe
 
   return (
     <DashboardProvider>
-      <div className="flex min-h-screen bg-[#F7F8FA] overflow-x-hidden">
+      <div className="flex min-h-screen bg-[#F7F8FA] w-screen overflow-hidden">
         {/* Mobile overlay */}
         {sidebarOpen ? (
           <div className="fixed inset-0 z-40 lg:hidden">
@@ -66,14 +66,14 @@ export function DashboardLayoutShell({ userLabel, children }: DashboardLayoutShe
         ) : null}
 
         {/* Sidebar - hidden on mobile, shown via overlay */}
-        <div className="hidden lg:block lg:w-[260px] lg:shrink-0">
+        <div className="hidden lg:block lg:w-[260px] lg:shrink-0 lg:overflow-hidden">
           <DashboardSidebar userLabel={userLabel} onSignOut={handleSignOut} />
         </div>
 
         {/* Main content - no horizontal scroll */}
-        <div className="flex min-h-screen flex-1 flex-col min-w-0 overflow-x-hidden">
+        <div className="flex min-h-screen flex-1 flex-col w-full min-w-0 overflow-x-hidden">
           {/* Mobile header with menu */}
-          <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-[#E5E7EB] bg-white px-4 py-3 lg:hidden">
+          <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-[#E5E7EB] bg-white px-4 py-3 lg:hidden shrink-0">
             <button
               type="button"
               onClick={() => setSidebarOpen(true)}
@@ -85,7 +85,7 @@ export function DashboardLayoutShell({ userLabel, children }: DashboardLayoutShe
             <span className="truncate text-lg font-semibold text-[#111827]">{mobileTitle}</span>
           </header>
 
-          <main className="flex-1 min-w-0 overflow-x-hidden">{children}</main>
+          <main className="flex-1 w-full min-w-0 overflow-x-hidden">{children}</main>
         </div>
       </div>
       <NewAreaModal />

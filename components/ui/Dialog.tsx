@@ -16,7 +16,6 @@ export type DialogProps = {
 
 export function Dialog({ open, onOpenChange, title, description, children, footer }: DialogProps) {
   const [mounted, setMounted] = React.useState(false);
-  const closeBtnRef = React.useRef<HTMLButtonElement | null>(null);
 
   React.useEffect(() => setMounted(true), []);
 
@@ -26,12 +25,7 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
       if (e.key === 'Escape') onOpenChange(false);
     };
     window.addEventListener('keydown', onKeyDown);
-    const prev = document.activeElement as HTMLElement | null;
-    closeBtnRef.current?.focus();
-    return () => {
-      window.removeEventListener('keydown', onKeyDown);
-      prev?.focus?.();
-    };
+    return () => window.removeEventListener('keydown', onKeyDown);
   }, [open, onOpenChange]);
 
   if (!mounted || !open) return null;
@@ -51,7 +45,7 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
               <h2 className="font-display text-xl font-semibold text-fg">{title}</h2>
               {description ? <p className="mt-1 text-sm text-muted">{description}</p> : null}
             </div>
-            <Button ref={closeBtnRef} variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+            <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
               Close
             </Button>
           </div>

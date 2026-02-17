@@ -27,10 +27,13 @@ import { NewHabitModal } from '@/components/dashboard/NewHabitModal';
 import { EditHabitModal } from '@/components/dashboard/EditHabitModal';
 import { HabitCellEditor, type LogEntry } from '@/components/dashboard/HabitCellEditor';
 import { HabitTimer } from '@/components/dashboard/HabitTimer';
+import { HabitNoteModal } from '@/components/dashboard/HabitNoteModal';
 import { EnhancedHabitRow } from '@/components/dashboard/EnhancedHabitRow';
 import { StreakDisplay } from '@/components/dashboard/StreakDisplay';
 import { useDashboard } from '@/contexts/DashboardContext';
 import type { HabitItem, StreakData } from '@/lib/dashboard-types';
+import { habitMatchesTimeOfDay, newHabitPayloadToItem, type TimeOfDayFilter } from '@/lib/habitUtils';
+import { fetchLogsForDateRange, upsertLog, deleteLog } from '@/services/habitLogsService';
 
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MOODS = [
@@ -56,7 +59,8 @@ function logKey(habitId: string, date: Date): LogKey {
 
 export function DashboardContent() {
   const searchParams = useSearchParams();
-  const { habits, setHabits, areas } = useDashboard();
+  const timeOfDayFilter = searchParams.get('filter') as TimeOfDayFilter | null;
+  const { habits, setHabits, areas, timeOfDaySlots, addHabit, updateHabit, deleteHabit, archiveHabit } = useDashboard();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -76,6 +80,7 @@ export function DashboardContent() {
   const [cellPopover, setCellPopover] = useState<{ habitId: string; date: Date } | null>(null);
   const [cellEditor, setCellEditor] = useState<{ habitId: string; date: Date } | null>(null);
   const [timerHabit, setTimerHabit] = useState<{ habit: HabitItem; date: Date } | null>(null);
+  const [noteModal, setNoteModal] = useState<{ habitId: string; habitName: string } | null>(null);
   const [streakData, setStreakData] = useState<Record<string, StreakData>>({});
 
   // Initialize streaks for all habits
@@ -96,6 +101,34 @@ export function DashboardContent() {
   useEffect(() => {
     if (searchParams.get('new') === 'habit') setNewHabitOpen(true);
   }, [searchParams]);
+
+  // Load habit logs from Supabase for date range around selectedDate
+  useEffect(() => {
+    const start = new Date(selectedDate);
+    start.setDate(start.getDate() - 31);
+    const end = new Date(selectedDate);
+    end.setDate(end.getDate() + 31);
+    let cancelled = false;
+    fetchLogsForDateRange(start, end).then((rows) => {
+      if (cancelled) return;
+      const nextLogs: Record<LogKey, LogEntry> = {};
+      const nextNotes: Record<LogKey, string> = {};
+      rows.forEach((r) => {
+        const d = new Date(r.log_date);
+        const key = logKey(r.habit_id, d);
+        nextLogs[key] = {
+          status: r.status as LogEntry['status'],
+          ...(r.value != null && { value: r.value }),
+          ...(r.duration_minutes != null && { durationMinutes: r.duration_minutes }),
+          ...(r.note && { note: r.note }),
+        };
+        if (r.note) nextNotes[key] = r.note;
+      });
+      setHabitLogs((prev) => ({ ...prev, ...nextLogs }));
+      setHabitNotes((prev) => ({ ...prev, ...nextNotes }));
+    });
+    return () => { cancelled = true; };
+  }, [selectedDate]);
 
   const today = new Date();
   const isToday = (d: Date) =>
@@ -128,40 +161,94 @@ export function DashboardContent() {
   const filteredHabits = filteredBySearch.filter((h) => {
     if (filterArea && h.areaId !== filterArea) return false;
     if (filterHabitId && h.id !== filterHabitId) return false;
+    if (timeOfDayFilter && !habitMatchesTimeOfDay(h, timeOfDayFilter)) return false;
     return !h.isArchived;
   });
 
   const handleUpdateHabit = useCallback((updated: HabitItem) => {
-    setHabits((prev) => prev.map((h) => (h.id === updated.id ? updated : h)));
+    updateHabit(updated.id, {
+      name: updated.name,
+      description: updated.description,
+      goal: updated.goal,
+      areaId: updated.areaId,
+      isArchived: updated.isArchived,
+    });
     setEditHabit(null);
     setMenuOpenId(null);
-  }, []);
-  const duplicateHabit = useCallback((habit: HabitItem) => {
-    setHabits((prev) => [...prev, { ...habit, id: String(Date.now()), name: `${habit.name} (copy)` }]);
+  }, [updateHabit]);
+  const duplicateHabit = useCallback(async (habit: HabitItem) => {
+    const { id: _id, done: _done, createdAt: _c, updatedAt: _u, ...rest } = habit;
+    await addHabit({ ...rest, name: `${habit.name} (copy)` });
     setMenuOpenId(null);
-  }, []);
-  const archiveHabit = useCallback((id: string) => {
-    setHabits((prev) => prev.map((h) => (h.id === id ? { ...h, isArchived: true } : h)));
+  }, [addHabit]);
+  const archiveHabitLocal = useCallback((id: string) => {
+    archiveHabit(id);
     setMenuOpenId(null);
-  }, []);
-  const deleteHabit = useCallback((id: string) => {
-    setHabits((prev) => prev.filter((h) => h.id !== id));
+  }, [archiveHabit]);
+  const deleteHabitLocal = useCallback((id: string) => {
+    deleteHabit(id);
     setMenuOpenId(null);
     setEditHabit((h) => (h?.id === id ? null : h));
-  }, []);
+  }, [deleteHabit]);
 
   const setLog = useCallback((habitId: string, date: Date, entry: LogEntry | null) => {
     const key = logKey(habitId, date);
-    if (entry) setHabitLogs((prev) => ({ ...prev, [key]: entry }));
-    else setHabitLogs((prev) => { const n = { ...prev }; delete n[key]; return n; });
+    if (entry) {
+      setHabitLogs((prev) => ({ ...prev, [key]: entry }));
+      if (entry.note !== undefined) setHabitNotes((prev) => ({ ...prev, [key]: entry.note || '' }));
+      upsertLog(habitId, date, {
+        status: entry.status,
+        value: entry.value,
+        durationMinutes: entry.durationMinutes,
+        note: entry.note,
+      }).catch(console.error);
+    } else {
+      setHabitLogs((prev) => { const n = { ...prev }; delete n[key]; return n; });
+      setHabitNotes((prev) => { const n = { ...prev }; delete n[key]; return n; });
+      deleteLog(habitId, date).catch(console.error);
+    }
   }, []);
-  const setNote = useCallback((habitId: string, date: Date, note: string) => {
+  const setNote = useCallback((habitId: string, date: Date, note: string | null) => {
     const key = logKey(habitId, date);
-    if (note) setHabitNotes((prev) => ({ ...prev, [key]: note }));
-    else setHabitNotes((prev) => { const n = { ...prev }; delete n[key]; return n; });
-  }, []);
+    const current = habitLogs[key];
+    if (note) {
+      setHabitNotes((prev) => ({ ...prev, [key]: note }));
+      setHabitLogs((prev) => ({ ...prev, [key]: { ...current, status: current?.status || 'completed', note } }));
+    } else {
+      setHabitNotes((prev) => { const n = { ...prev }; delete n[key]; return n; });
+      setHabitLogs((prev) => {
+        const n = { ...prev };
+        if (n[key]) { const e = { ...n[key] }; delete e.note; n[key] = e; }
+        return n;
+      });
+    }
+    upsertLog(habitId, date, {
+      status: current?.status || 'completed',
+      value: current?.value,
+      durationMinutes: current?.durationMinutes,
+      note: note || undefined,
+    }).catch(console.error);
+  }, [habitLogs]);
   const getLog = (habitId: string, date: Date) => habitLogs[logKey(habitId, date)];
   const getNote = (habitId: string, date: Date) => habitNotes[logKey(habitId, date)];
+
+  const getEffectiveDone = useCallback((habit: HabitItem, date: Date) => {
+    const log = getLog(habit.id, date);
+    if (log?.status === 'completed') return log.value ?? habit.goal;
+    return habit.done;
+  }, [habitLogs]);
+  const getEffectiveCompleted = useCallback((habit: HabitItem, date: Date) => {
+    const log = getLog(habit.id, date);
+    return log?.status === 'completed';
+  }, [habitLogs]);
+
+  const habitsWithEffective = filteredHabits.map((h) => ({
+    ...h,
+    effectiveDone: getEffectiveDone(h, selectedDate),
+    effectiveCompleted: getEffectiveCompleted(h, selectedDate),
+  }));
+  const incompleteHabits = habitsWithEffective.filter((h) => !h.effectiveCompleted);
+  const successHabits = habitsWithEffective.filter((h) => h.effectiveCompleted);
 
   const openNewHabit = () => {
     setAddDropdownOpen(false);
@@ -169,21 +256,11 @@ export function DashboardContent() {
   };
 
   const handleSaveHabit = useCallback(
-    (habit: { name: string; repeat: string; goal: string; timeOfDay: string[]; startDate: string; reminders: string[]; area: string; type?: 'checkbox' | 'number' | 'duration' }) => {
-      setHabits((prev) => [
-        ...prev,
-        {
-          id: String(Date.now()),
-          name: habit.name,
-          done: 0,
-          goal: parseInt(habit.goal, 10) || 1,
-          type: habit.type ?? 'checkbox',
-          areaId: habit.area || undefined,
-          frequency: { type: 'daily' },
-        } as HabitItem,
-      ]);
+    async (payload: Parameters<typeof newHabitPayloadToItem>[0]) => {
+      const item = newHabitPayloadToItem(payload);
+      await addHabit(item);
     },
-    [setHabits]
+    [addHabit]
   );
 
   const { start: monthStart, count: monthCount } = getDaysInMonth(
@@ -452,14 +529,15 @@ export function DashboardContent() {
         {viewMode === 'list' ? (
           <div className="space-y-4">
             {/* Incomplete habits */}
-            {filteredHabits.filter((h) => h.done < h.goal).length > 0 && (
+            {incompleteHabits.length > 0 && (
               <div>
-                {filteredHabits.filter((h) => h.done < h.goal).map((habit) => (
+                {incompleteHabits.map((habit) => (
                   <EnhancedHabitRow
                     key={habit.id}
-                    habit={habit}
+                    habit={{ ...habit, done: habit.effectiveDone }}
                     streak={streakData[habit.id]}
                     selected={selectedIds.has(habit.id)}
+                    todayStatus={getLog(habit.id, selectedDate)?.status ?? undefined}
                     onToggleSelect={() => toggleSelect(habit.id)}
                     onAddTimes={(n) =>
                       setHabits((prev) =>
@@ -470,26 +548,32 @@ export function DashboardContent() {
                     onMenuToggle={() => setMenuOpenId(menuOpenId === habit.id ? null : habit.id)}
                     onEdit={() => setEditHabit(habit)}
                     onDuplicate={() => duplicateHabit(habit)}
-                    onArchive={() => archiveHabit(habit.id)}
-                    onDelete={() => deleteHabit(habit.id)}
+                    onArchive={() => archiveHabitLocal(habit.id)}
+                    onDelete={() => deleteHabitLocal(habit.id)}
                     onStartTimer={() => setTimerHabit({ habit, date: selectedDate })}
+                    onStatusChange={(status) => setLog(habit.id, selectedDate, { status })}
+                    onAddLog={() => setCellEditor({ habitId: habit.id, date: selectedDate })}
+                    onRemoveLogs={() => setLog(habit.id, selectedDate, null)}
+                    onAddNote={() => setNoteModal({ habitId: habit.id, habitName: habit.name })}
+                    onViewNotes={() => setNoteModal({ habitId: habit.id, habitName: habit.name })}
                   />
                 ))}
               </div>
             )}
             {/* Success section */}
-            {filteredHabits.filter((h) => h.done >= h.goal).length > 0 && (
+            {successHabits.length > 0 && (
               <div>
                 <h3 className="mb-2 text-sm font-semibold text-[#111827]">
-                  {filteredHabits.filter((h) => h.done >= h.goal).length} Success
+                  {successHabits.length} Success
                 </h3>
-                {filteredHabits.filter((h) => h.done >= h.goal).map((habit) => (
+                {successHabits.map((habit) => (
                   <EnhancedHabitRow
                     key={habit.id}
-                    habit={habit}
+                    habit={{ ...habit, done: habit.effectiveDone }}
                     streak={streakData[habit.id]}
                     selected={selectedIds.has(habit.id)}
                     completed
+                    todayStatus={getLog(habit.id, selectedDate)?.status ?? undefined}
                     onToggleSelect={() => toggleSelect(habit.id)}
                     onAddTimes={(n) =>
                       setHabits((prev) =>
@@ -500,9 +584,14 @@ export function DashboardContent() {
                     onMenuToggle={() => setMenuOpenId(menuOpenId === habit.id ? null : habit.id)}
                     onEdit={() => setEditHabit(habit)}
                     onDuplicate={() => duplicateHabit(habit)}
-                    onArchive={() => archiveHabit(habit.id)}
-                    onDelete={() => deleteHabit(habit.id)}
+                    onArchive={() => archiveHabitLocal(habit.id)}
+                    onDelete={() => deleteHabitLocal(habit.id)}
                     onStartTimer={() => setTimerHabit({ habit, date: selectedDate })}
+                    onStatusChange={(status) => setLog(habit.id, selectedDate, { status })}
+                    onAddLog={() => setCellEditor({ habitId: habit.id, date: selectedDate })}
+                    onRemoveLogs={() => setLog(habit.id, selectedDate, null)}
+                    onAddNote={() => setNoteModal({ habitId: habit.id, habitName: habit.name })}
+                    onViewNotes={() => setNoteModal({ habitId: habit.id, habitName: habit.name })}
                   />
                 ))}
               </div>
@@ -662,10 +751,12 @@ export function DashboardContent() {
         </div>
       </div>
 
-      <NewHabitModal areas={areas}
+      <NewHabitModal
+        areas={areas}
         open={newHabitOpen}
         onOpenChange={setNewHabitOpen}
         onSave={handleSaveHabit}
+        timeOfDayOptions={timeOfDaySlots.length ? timeOfDaySlots.map((s) => s.name) : undefined}
       />
       <EditHabitModal habit={editHabit} onClose={() => setEditHabit(null)} onSave={handleUpdateHabit} areas={areas} />
 
@@ -705,6 +796,21 @@ export function DashboardContent() {
             setTimerHabit(null);
           }}
           onCancel={() => setTimerHabit(null)}
+        />
+      )}
+
+      {/* Note Modal */}
+      {noteModal && (
+        <HabitNoteModal
+          open={!!noteModal}
+          onOpenChange={(open) => !open && setNoteModal(null)}
+          habitName={noteModal.habitName}
+          date={selectedDate}
+          initialNote={getNote(noteModal.habitId, selectedDate) || ''}
+          onSave={(note) => {
+            setNote(noteModal.habitId, selectedDate, note);
+            setNoteModal(null);
+          }}
         />
       )}
     </div>

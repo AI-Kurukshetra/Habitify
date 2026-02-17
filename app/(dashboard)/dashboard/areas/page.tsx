@@ -17,7 +17,7 @@ import { useDashboard } from '@/contexts/DashboardContext';
 const COLORS = ['#2a67f4', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
 
 export default function AreasPage() {
-  const { areas, setAreas, addArea } = useDashboard();
+  const { areas, addArea, updateArea, deleteArea: deleteAreaInDb } = useDashboard();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
@@ -39,22 +39,20 @@ export default function AreasPage() {
     setModalOpen(true);
   };
 
-  const saveArea = () => {
+  const saveArea = async () => {
     if (!name.trim()) return;
     if (editingId) {
-      setAreas((prev) =>
-        prev.map((a) => (a.id === editingId ? { ...a, name: name.trim(), color } : a))
-      );
+      await updateArea(editingId, { name: name.trim(), color });
     } else {
-      addArea({ name: name.trim(), color });
+      await addArea({ name: name.trim(), color });
     }
     setModalOpen(false);
   };
 
-  const deleteArea = useCallback((id: string) => {
-    setAreas((prev) => prev.filter((a) => a.id !== id));
-    setMenuOpenId(null);
-  }, [setAreas]);
+  const deleteArea = useCallback(async (id: string) => {
+    const ok = await deleteAreaInDb(id);
+    if (ok) setMenuOpenId(null);
+  }, [deleteAreaInDb]);
 
   return (
     <div className="flex flex-col bg-white min-h-full">

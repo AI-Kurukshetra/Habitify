@@ -40,14 +40,17 @@ export type NewHabitModalProps = {
   onOpenChange: (open: boolean) => void;
   onSave?: (habit: NewHabitModalSavePayload) => void;
   areas?: AreaItem[];
+  /** Time-of-day slot names (e.g. from Settings). If not provided, defaults to Morning, Afternoon, Evening. */
+  timeOfDayOptions?: string[];
 };
 
 const TABS = ['New Habit', 'Fitbit', 'Strava'] as const;
-const TIME_OPTIONS = ['Snacks time', 'Morning', 'Afternoon', 'Evening'];
+const DEFAULT_TIME_OPTIONS = ['Morning', 'Afternoon', 'Evening'];
 const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const COLORS = ['#2a67f4', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
 
-export function NewHabitModal({ open, onOpenChange, onSave, areas = [] }: NewHabitModalProps) {
+export function NewHabitModal({ open, onOpenChange, onSave, areas = [], timeOfDayOptions }: NewHabitModalProps) {
+  const timeOptions = timeOfDayOptions?.length ? timeOfDayOptions : DEFAULT_TIME_OPTIONS;
   const [activeTab, setActiveTab] = useState<(typeof TABS)[number]>('New Habit');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -327,7 +330,7 @@ export function NewHabitModal({ open, onOpenChange, onSave, areas = [] }: NewHab
                 Time of Day
               </label>
               <div className="flex flex-wrap gap-2">
-                {TIME_OPTIONS.map((t) => (
+                {timeOptions.map((t) => (
                   <label
                     key={t}
                     className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm"

@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS public.areas (
     name TEXT NOT NULL,
     color TEXT NOT NULL DEFAULT '#2a67f4',
     icon TEXT,
-    "order" INTEGER DEFAULT 0,
+    sort_order INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -16,8 +16,8 @@ CREATE TABLE IF NOT EXISTS public.areas (
 -- Create index on user_id for faster queries
 CREATE INDEX IF NOT EXISTS areas_user_id_idx ON public.areas(user_id);
 
--- Create index on user_id and order
-CREATE INDEX IF NOT EXISTS areas_user_order_idx ON public.areas(user_id, "order");
+-- Create index on user_id and sort_order
+CREATE INDEX IF NOT EXISTS areas_user_sort_order_idx ON public.areas(user_id, sort_order);
 
 -- Enable Row Level Security
 ALTER TABLE public.areas ENABLE ROW LEVEL SECURITY;
@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS public.habits (
     unit TEXT,
     target_value INTEGER,
     days_of_week INTEGER[],
+    tags TEXT[],
     is_archived BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL

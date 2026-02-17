@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import {
@@ -19,8 +19,20 @@ import {
   MoonIcon,
 } from '@/components/ui/icons';
 import { useDashboard } from '@/contexts/DashboardContext';
+import { habitMatchesTimeOfDay } from '@/lib/habitUtils';
+import type { TimeOfDaySlot } from '@/services/timeOfDayService';
 
 const SIDEBAR_BG = '#F7F8FA';
+
+const DEFAULT_TIME_SLOTS: { key: string; label: string; icon: 'sun' | 'moon' }[] = [
+  { key: 'morning', label: 'Morning', icon: 'sun' },
+  { key: 'afternoon', label: 'Afternoon', icon: 'sun' },
+  { key: 'evening', label: 'Evening', icon: 'moon' },
+];
+
+function slotFilterKey(slot: TimeOfDaySlot): string {
+  return slot.name.toLowerCase().trim().replace(/\s+/g, '-');
+}
 
 function CollapsibleSection({
   title,
@@ -84,10 +96,27 @@ export function DashboardSidebar({
   onSignOut?: () => void;
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const basePath = pathname?.split('?')[0] ?? '';
+  const timeFilter = searchParams?.get('filter') ?? null;
   const [popoverOpen, setPopoverOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
-  const { areas, setNewAreaModalOpen } = useDashboard();
+  const { areas, habits, timeOfDaySlots, setNewAreaModalOpen } = useDashboard();
+  const activeHabits = habits.filter((h) => !h.isArchived);
+  const timeSlots: TimeOfDaySlot[] = timeOfDaySlots.length > 0
+    ? timeOfDaySlots
+    : DEFAULT_TIME_SLOTS.map((s, i) => ({
+        id: s.key,
+        name: s.label,
+        icon: s.icon,
+        startTime: s.key === 'morning' ? '00:00' : s.key === 'afternoon' ? '12:00' : '18:00',
+        endTime: s.key === 'morning' ? '12:00' : s.key === 'afternoon' ? '18:00' : '00:00',
+        color: null,
+        sortOrder: i,
+      }));
+  const getFilterKey = (slot: TimeOfDaySlot) => slotFilterKey(slot);
+  const habitsByTime = (filterKey: string) =>
+    activeHabits.filter((h) => habitMatchesTimeOfDay(h, filterKey));
 
   const displayLabel = userLabel && userLabel !== 'Guest' ? userLabel : 'Guest';
   const isAreaRoute = basePath.startsWith('/dashboard/area/');
@@ -148,9 +177,43 @@ export function DashboardSidebar({
         </div>
 
         <CollapsibleSection title="TIME OF DAY" defaultOpen={true}>
-          <SidebarLink href="/dashboard?filter=morning" label="Morning" icon={<SunIcon size={16} />} active={false} />
-          <SidebarLink href="/dashboard?filter=afternoon" label="Afternoon" icon={<SunIcon size={16} />} active={false} />
-          <SidebarLink href="/dashboard?filter=evening" label="Evening" icon={<MoonIcon size={16} />} active={false} badge="• now" />
+          {timeSlots.map((slot) => {
+            const key = getFilterKey(slot);
+            const label = slot.name;
+            const count = habitsByTime(key).length;
+            const iconNode = slot.icon === 'moon' || (slot.icon && String(slot.icon).toLowerCase().includes('moon'))
+              ? <MoonIcon size={16} />
+              : <SunIcon size={16} />;
+            return (
+              <div key={slot.id} className="space-y-0.5">
+                <SidebarLink
+                  href={`/dashboard?filter=${encodeURIComponent(key)}`}
+                  label={label}
+                  icon={iconNode}
+                  active={timeFilter === key}
+                  badge={count > 0 ? String(count) : undefined}
+                />
+                {habitsByTime(key).length > 0 && (
+                  <div className="ml-6 pl-1 space-y-0.5 border-l border-[#E5E7EB]">
+                    {habitsByTime(key).map((habit) => (
+                      <Link
+                        key={habit.id}
+                        href={`/dashboard?filter=${encodeURIComponent(key)}`}
+                        onClick={() => typeof window !== 'undefined' && (window as any).__closeSidebar?.()}
+                        className={cn(
+                          'block truncate py-1.5 pr-2 text-xs transition',
+                          timeFilter === key ? 'text-[#2a67f4] font-medium' : 'text-[#6B7280] hover:text-[#111827]'
+                        )}
+                        title={habit.name}
+                      >
+                        {habit.name}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </CollapsibleSection>
 
         <CollapsibleSection title="AREAS" defaultOpen={true}>
