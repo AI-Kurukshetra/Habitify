@@ -37,16 +37,16 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
   if (!mounted || !open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50">
+    <div className="fixed inset-0 z-50 overflow-y-auto">
       <button
         type="button"
         className="absolute inset-0 bg-fg/30 backdrop-blur-sm"
         aria-label="Close dialog"
         onClick={() => onOpenChange(false)}
       />
-      <div className="relative mx-auto flex min-h-full max-w-lg items-center px-4 py-10">
-        <div className={cn('w-full rounded-3xl border border-border/70 bg-card shadow-lift')}>
-          <div className="flex items-start justify-between gap-4 border-b border-border/60 p-5">
+      <div className="relative mx-auto flex min-h-full max-w-lg items-center justify-center px-4 py-6 sm:py-10">
+        <div className={cn('w-full rounded-3xl border border-border/70 bg-card shadow-lift flex flex-col max-h-[90vh] min-h-0')}>
+          <div className="flex items-start justify-between gap-4 border-b border-border/60 p-5 shrink-0">
             <div>
               <h2 className="font-display text-xl font-semibold text-fg">{title}</h2>
               {description ? <p className="mt-1 text-sm text-muted">{description}</p> : null}
@@ -55,8 +55,10 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
               Close
             </Button>
           </div>
-          <div className="p-5">{children}</div>
-          {footer ? <div className="border-t border-border/60 p-5">{footer}</div> : null}
+          <div className="p-5 overflow-y-auto overflow-x-hidden flex-1 min-h-0 overscroll-contain">
+            {children}
+          </div>
+          {footer ? <div className="border-t border-border/60 p-5 shrink-0">{footer}</div> : null}
         </div>
       </div>
     </div>,

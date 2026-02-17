@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Dialog } from '@/components/ui/Dialog';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
+import type { AreaItem } from '@/lib/dashboard-types';
 import {
   PlusIcon,
   XIcon,
@@ -17,26 +18,56 @@ import {
   ListIcon,
 } from '@/components/ui/icons';
 
+export type NewHabitModalSavePayload = {
+  name: string;
+  description?: string;
+  repeat: string;
+  goal: string;
+  timeOfDay: string[];
+  startDate: string;
+  reminders: string[];
+  area: string;
+  type?: 'checkbox' | 'number' | 'duration';
+  target_value?: number;
+  unit?: string;
+  days_of_week?: number[];
+  color?: string;
+  icon?: string;
+};
+
 export type NewHabitModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave?: (habit: { name: string; repeat: string; goal: string; timeOfDay: string[]; startDate: string; reminders: string[]; area: string }) => void;
+  onSave?: (habit: NewHabitModalSavePayload) => void;
+  areas?: AreaItem[];
 };
 
 const TABS = ['New Habit', 'Fitbit', 'Strava'] as const;
 const TIME_OPTIONS = ['Snacks time', 'Morning', 'Afternoon', 'Evening'];
+const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const COLORS = ['#2a67f4', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
 
-export function NewHabitModal({ open, onOpenChange, onSave }: NewHabitModalProps) {
+export function NewHabitModal({ open, onOpenChange, onSave, areas = [] }: NewHabitModalProps) {
   const [activeTab, setActiveTab] = useState<(typeof TABS)[number]>('New Habit');
   const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
   const [repeat, setRepeat] = useState('Daily');
   const [goal, setGoal] = useState('1');
+  const [habitType, setHabitType] = useState<'checkbox' | 'number' | 'duration'>('checkbox');
+  const [targetValue, setTargetValue] = useState('1');
+  const [unit, setUnit] = useState('');
+  const [daysOfWeek, setDaysOfWeek] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
+  const [color, setColor] = useState(COLORS[0]);
   const [timeOfDay, setTimeOfDay] = useState<string[]>([]);
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [endCondition, setEndCondition] = useState('Never');
   const [reminders, setReminders] = useState<string[]>(['09:00']);
   const [area, setArea] = useState('');
   const [checklist, setChecklist] = useState<string[]>([]);
+
+  const toggleDay = (day: number) => {
+    setDaysOfWeek((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort((a, b) => a - b)));
+  };
 
   const toggleTime = (t: string) => {
     setTimeOfDay((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
@@ -55,17 +86,29 @@ export function NewHabitModal({ open, onOpenChange, onSave }: NewHabitModalProps
   const handleSave = () => {
     onSave?.({
       name: name || 'New Habit',
+      description: description || undefined,
       repeat,
       goal,
       timeOfDay,
       startDate,
       reminders,
       area,
+      type: habitType,
+      target_value: targetValue ? Number(targetValue) : undefined,
+      unit: unit || undefined,
+      days_of_week: daysOfWeek,
+      color,
     });
     onOpenChange(false);
     setName('');
+    setDescription('');
     setRepeat('Daily');
     setGoal('1');
+    setHabitType('checkbox');
+    setTargetValue('1');
+    setUnit('');
+    setDaysOfWeek([0, 1, 2, 3, 4, 5, 6]);
+    setColor(COLORS[0]);
     setTimeOfDay([]);
     setReminders(['09:00']);
     setArea('');
@@ -131,6 +174,103 @@ export function NewHabitModal({ open, onOpenChange, onSave }: NewHabitModalProps
                   <span aria-hidden>✨</span>
                   Magic Fill
                 </Button>
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-[#374151]">Description</label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Optional description"
+                rows={2}
+                className="w-full rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:border-[#2a67f4] focus:outline-none focus:ring-1 focus:ring-[#2a67f4]"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-[#374151]">Type</label>
+              <div className="flex gap-2">
+                {(['checkbox', 'number', 'duration'] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setHabitType(t)}
+                    className={cn(
+                      'rounded-lg border px-3 py-2 text-sm font-medium capitalize',
+                      habitType === t ? 'border-[#2a67f4] bg-[#EFF6FF] text-[#2a67f4]' : 'border-[#E5E7EB] text-[#6B7280] hover:bg-[#F9FAFB]'
+                    )}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {habitType !== 'checkbox' && (
+              <div className="flex gap-2">
+                <div>
+                  <label className="mb-1 block text-xs text-[#6B7280]">Target value</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={targetValue}
+                    onChange={(e) => setTargetValue(e.target.value)}
+                    className="w-24 rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-[#6B7280]">Unit</label>
+                  <input
+                    type="text"
+                    value={unit}
+                    onChange={(e) => setUnit(e.target.value)}
+                    placeholder="e.g. min, pages"
+                    className="w-28 rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-[#374151]">Color</label>
+              <div className="flex flex-wrap gap-2">
+                {COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setColor(c)}
+                    className={cn(
+                      'h-8 w-8 rounded-full border-2 transition',
+                      color === c ? 'border-[#111827] scale-110' : 'border-transparent'
+                    )}
+                    style={{ backgroundColor: c }}
+                    aria-label={`Color ${c}`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-[#374151]">Days of week</label>
+              <div className="flex flex-wrap gap-1">
+                {DAYS_OF_WEEK.map((label, i) => (
+                  <label
+                    key={i}
+                    className={cn(
+                      'cursor-pointer rounded-lg border px-2.5 py-1.5 text-sm',
+                      daysOfWeek.includes(i) ? 'border-[#2a67f4] bg-[#EFF6FF] text-[#2a67f4]' : 'border-[#E5E7EB] text-[#6B7280]'
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={daysOfWeek.includes(i)}
+                      onChange={() => toggleDay(i)}
+                      className="sr-only"
+                    />
+                    {label}
+                  </label>
+                ))}
               </div>
             </div>
 
@@ -285,8 +425,9 @@ export function NewHabitModal({ open, onOpenChange, onSave }: NewHabitModalProps
                 className="w-full rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm text-[#111827] focus:border-[#2a67f4] focus:outline-none"
               >
                 <option value="">Select areas</option>
-                <option value="todo">todo list</option>
-                <option value="health">Health</option>
+                {areas.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
               </select>
             </div>
 

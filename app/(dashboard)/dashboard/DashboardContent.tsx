@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   SearchIcon,
@@ -16,98 +17,28 @@ import {
   WrenchIcon,
   RunIcon,
   XIcon,
+  CopyIcon,
+  ArchiveIcon,
+  TrashIcon,
+  FileTextIcon,
+  TimerIcon,
 } from '@/components/ui/icons';
 import { NewHabitModal } from '@/components/dashboard/NewHabitModal';
-
-export type HabitItem = {
-  id: string;
-  name: string;
-  done: number;
-  goal: number;
-  status?: 'complete' | 'skip' | 'fail';
-};
+import { EditHabitModal } from '@/components/dashboard/EditHabitModal';
+import { HabitCellEditor, type LogEntry } from '@/components/dashboard/HabitCellEditor';
+import { HabitTimer } from '@/components/dashboard/HabitTimer';
+import { EnhancedHabitRow } from '@/components/dashboard/EnhancedHabitRow';
+import { StreakDisplay } from '@/components/dashboard/StreakDisplay';
+import { useDashboard } from '@/contexts/DashboardContext';
+import type { HabitItem, StreakData } from '@/lib/dashboard-types';
 
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-const INITIAL_HABITS: HabitItem[] = [
-  { id: '1', name: 'test', done: 0, goal: 1 },
-  { id: '2', name: 'Set a To-do List', done: 1, goal: 1 },
+const MOODS = [
+  { level: 1, emoji: '😢', label: 'Bad' },
+  { level: 2, emoji: '😐', label: 'Okay' },
+  { level: 3, emoji: '🙂', label: 'Good' },
+  { level: 4, emoji: '😊', label: 'Great' },
 ];
-
-function HabitRow({
-  habit,
-  selected,
-  onToggleSelect,
-  onAddTimes,
-  completed,
-}: {
-  habit: HabitItem;
-  selected: boolean;
-  onToggleSelect: () => void;
-  onAddTimes: (delta: number) => void;
-  completed?: boolean;
-}) {
-  const initial = habit.name.charAt(0).toUpperCase();
-  const isWrench = habit.name.toLowerCase().includes('to-do');
-  const isRun = habit.name.toLowerCase() === 'test';
-  return (
-    <div
-      className={cn(
-        'flex items-center gap-3 border border-[#E5E7EB] px-4 py-3',
-        selected && 'border-[#2a67f4] bg-[#EFF6FF]'
-      )}
-    >
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#E5E7EB] text-sm font-medium text-[#6B7280]">
-        {isWrench ? <WrenchIcon size={16} /> : isRun ? <RunIcon size={16} /> : initial}
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-medium text-[#111827]">{habit.name}</p>
-        <p className="text-sm text-[#6B7280]">
-          {habit.done}/{habit.goal} times
-        </p>
-      </div>
-      <div className="flex shrink-0 items-center gap-1">
-        <span className="text-xs text-[#6B7280]">Add (times)</span>
-        <div className="flex items-center rounded border border-[#E5E7EB] bg-white">
-          <button
-            type="button"
-            onClick={() => onAddTimes(-1)}
-            className="flex h-7 w-6 items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6]"
-            aria-label="Decrease"
-          >
-            −
-          </button>
-          <span className="min-w-[1.5rem] py-0.5 text-center text-sm">{habit.goal}</span>
-          <button
-            type="button"
-            onClick={() => onAddTimes(1)}
-            className="flex h-7 w-6 items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6]"
-            aria-label="Increase"
-          >
-            +
-          </button>
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={onToggleSelect}
-        className={cn(
-          'flex h-6 w-6 shrink-0 items-center justify-center rounded-full',
-          completed || habit.done >= habit.goal ? 'text-[#10B981]' : 'text-[#2a67f4]'
-        )}
-        aria-label={selected ? 'Deselect' : 'Select'}
-      >
-        <CheckIcon size={18} />
-      </button>
-      <button
-        type="button"
-        className="rounded p-1.5 text-[#6B7280] hover:bg-[#F3F4F6]"
-        aria-label="More options"
-      >
-        <MoreVerticalIcon size={18} />
-      </button>
-    </div>
-  );
-}
 
 function getDaysInMonth(year: number, month: number) {
   const first = new Date(year, month, 1);
@@ -117,16 +48,54 @@ function getDaysInMonth(year: number, month: number) {
   return { start, count };
 }
 
+type LogKey = string;
+
+function logKey(habitId: string, date: Date): LogKey {
+  return `${habitId}-${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
 export function DashboardContent() {
+  const searchParams = useSearchParams();
+  const { habits, setHabits, areas } = useDashboard();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [habits, setHabits] = useState<HabitItem[]>(INITIAL_HABITS);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [addDropdownOpen, setAddDropdownOpen] = useState(false);
   const [newHabitOpen, setNewHabitOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [todoInput, setTodoInput] = useState('');
+  const [editHabit, setEditHabit] = useState<HabitItem | null>(null);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [filterArea, setFilterArea] = useState<string>('');
+  const [filterHabitId, setFilterHabitId] = useState<string>('');
+  const [dateRangePreset, setDateRangePreset] = useState<'week' | 'month'>('week');
+  const [moodLevel, setMoodLevel] = useState<number | null>(null);
+  const [habitLogs, setHabitLogs] = useState<Record<LogKey, LogEntry>>({});
+  const [habitNotes, setHabitNotes] = useState<Record<LogKey, string>>({});
+  const [cellPopover, setCellPopover] = useState<{ habitId: string; date: Date } | null>(null);
+  const [cellEditor, setCellEditor] = useState<{ habitId: string; date: Date } | null>(null);
+  const [timerHabit, setTimerHabit] = useState<{ habit: HabitItem; date: Date } | null>(null);
+  const [streakData, setStreakData] = useState<Record<string, StreakData>>({});
+
+  // Initialize streaks for all habits
+  useEffect(() => {
+    const newStreaks: Record<string, StreakData> = {};
+    habits.forEach((habit) => {
+      if (!streakData[habit.id]) {
+        newStreaks[habit.id] = {
+          habitId: habit.id,
+          currentStreak: 0,
+          longestStreak: 0,
+        };
+      }
+    });
+    setStreakData((prev) => ({ ...prev, ...newStreaks }));
+  }, [habits]);
+
+  useEffect(() => {
+    if (searchParams.get('new') === 'habit') setNewHabitOpen(true);
+  }, [searchParams]);
 
   const today = new Date();
   const isToday = (d: Date) =>
@@ -153,9 +122,46 @@ export function DashboardContent() {
     setAddDropdownOpen(false);
   }, [selectedIds]);
 
-  const filteredHabits = searchQuery.trim()
+  const filteredBySearch = searchQuery.trim()
     ? habits.filter((h) => h.name.toLowerCase().includes(searchQuery.toLowerCase()))
     : habits;
+  const filteredHabits = filteredBySearch.filter((h) => {
+    if (filterArea && h.areaId !== filterArea) return false;
+    if (filterHabitId && h.id !== filterHabitId) return false;
+    return !h.isArchived;
+  });
+
+  const handleUpdateHabit = useCallback((updated: HabitItem) => {
+    setHabits((prev) => prev.map((h) => (h.id === updated.id ? updated : h)));
+    setEditHabit(null);
+    setMenuOpenId(null);
+  }, []);
+  const duplicateHabit = useCallback((habit: HabitItem) => {
+    setHabits((prev) => [...prev, { ...habit, id: String(Date.now()), name: `${habit.name} (copy)` }]);
+    setMenuOpenId(null);
+  }, []);
+  const archiveHabit = useCallback((id: string) => {
+    setHabits((prev) => prev.map((h) => (h.id === id ? { ...h, isArchived: true } : h)));
+    setMenuOpenId(null);
+  }, []);
+  const deleteHabit = useCallback((id: string) => {
+    setHabits((prev) => prev.filter((h) => h.id !== id));
+    setMenuOpenId(null);
+    setEditHabit((h) => (h?.id === id ? null : h));
+  }, []);
+
+  const setLog = useCallback((habitId: string, date: Date, entry: LogEntry | null) => {
+    const key = logKey(habitId, date);
+    if (entry) setHabitLogs((prev) => ({ ...prev, [key]: entry }));
+    else setHabitLogs((prev) => { const n = { ...prev }; delete n[key]; return n; });
+  }, []);
+  const setNote = useCallback((habitId: string, date: Date, note: string) => {
+    const key = logKey(habitId, date);
+    if (note) setHabitNotes((prev) => ({ ...prev, [key]: note }));
+    else setHabitNotes((prev) => { const n = { ...prev }; delete n[key]; return n; });
+  }, []);
+  const getLog = (habitId: string, date: Date) => habitLogs[logKey(habitId, date)];
+  const getNote = (habitId: string, date: Date) => habitNotes[logKey(habitId, date)];
 
   const openNewHabit = () => {
     setAddDropdownOpen(false);
@@ -163,7 +169,7 @@ export function DashboardContent() {
   };
 
   const handleSaveHabit = useCallback(
-    (habit: { name: string; repeat: string; goal: string; timeOfDay: string[]; startDate: string; reminders: string[]; area: string }) => {
+    (habit: { name: string; repeat: string; goal: string; timeOfDay: string[]; startDate: string; reminders: string[]; area: string; type?: 'checkbox' | 'number' | 'duration' }) => {
       setHabits((prev) => [
         ...prev,
         {
@@ -171,10 +177,13 @@ export function DashboardContent() {
           name: habit.name,
           done: 0,
           goal: parseInt(habit.goal, 10) || 1,
-        },
+          type: habit.type ?? 'checkbox',
+          areaId: habit.area || undefined,
+          frequency: { type: 'daily' },
+        } as HabitItem,
       ]);
     },
-    []
+    [setHabits]
   );
 
   const { start: monthStart, count: monthCount } = getDaysInMonth(
@@ -193,7 +202,7 @@ export function DashboardContent() {
       {/* Header - desktop: inside main; mobile already has "All Habits" in layout */}
       <div className="border-b border-[#E5E7EB] px-4 py-4 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-xl font-semibold text-[#111827] lg:text-2xl">All Habits</h1>
+          <h1 className="text-xl font-semibold text-[#111827] lg:text-2xl">Journal / All Habits</h1>
           <div className="flex items-center gap-2">
             {/* View toggle */}
             <div className="flex rounded-lg border border-[#E5E7EB] p-0.5">
@@ -260,6 +269,65 @@ export function DashboardContent() {
             >
               <MoreVerticalIcon size={18} />
             </button>
+          </div>
+        </div>
+        {/* Filters: Area, Habit, Date range */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <select
+            value={filterArea}
+            onChange={(e) => setFilterArea(e.target.value)}
+            className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#111827] focus:border-[#2a67f4] focus:outline-none"
+          >
+            <option value="">All areas</option>
+            {areas.map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
+          <select
+            value={filterHabitId}
+            onChange={(e) => setFilterHabitId(e.target.value)}
+            className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#111827] focus:border-[#2a67f4] focus:outline-none"
+          >
+            <option value="">All habits</option>
+            {habits.filter((h) => !h.isArchived).map((h) => (
+              <option key={h.id} value={h.id}>{h.name}</option>
+            ))}
+          </select>
+          <div className="flex rounded-lg border border-[#E5E7EB] p-0.5">
+            <button
+              type="button"
+              onClick={() => setDateRangePreset('week')}
+              className={cn('rounded-md px-3 py-1.5 text-sm font-medium', dateRangePreset === 'week' ? 'bg-[#2a67f4] text-white' : 'text-[#6B7280] hover:bg-[#F3F4F6]')}
+            >
+              This week
+            </button>
+            <button
+              type="button"
+              onClick={() => setDateRangePreset('month')}
+              className={cn('rounded-md px-3 py-1.5 text-sm font-medium', dateRangePreset === 'month' ? 'bg-[#2a67f4] text-white' : 'text-[#6B7280] hover:bg-[#F3F4F6]')}
+            >
+              This month
+            </button>
+          </div>
+        </div>
+        {/* Mood selector */}
+        <div className="mt-3 flex items-center gap-2">
+          <span className="text-sm font-medium text-[#6B7280]">Mood:</span>
+          <div className="flex gap-1">
+            {MOODS.map((m) => (
+              <button
+                key={m.level}
+                type="button"
+                onClick={() => setMoodLevel(moodLevel === m.level ? null : m.level)}
+                className={cn(
+                  'rounded-lg border px-2 py-1 text-lg transition',
+                  moodLevel === m.level ? 'border-[#2a67f4] bg-[#EFF6FF]' : 'border-[#E5E7EB] hover:bg-[#F9FAFB]'
+                )}
+                title={m.label}
+              >
+                {m.emoji}
+              </button>
+            ))}
           </div>
         </div>
       </div>
@@ -387,38 +455,54 @@ export function DashboardContent() {
             {filteredHabits.filter((h) => h.done < h.goal).length > 0 && (
               <div>
                 {filteredHabits.filter((h) => h.done < h.goal).map((habit) => (
-                  <HabitRow
+                  <EnhancedHabitRow
                     key={habit.id}
                     habit={habit}
+                    streak={streakData[habit.id]}
                     selected={selectedIds.has(habit.id)}
                     onToggleSelect={() => toggleSelect(habit.id)}
                     onAddTimes={(n) =>
                       setHabits((prev) =>
-                        prev.map((x) => (x.id === habit.id ? { ...x, goal: Math.max(1, x.goal + n) } : x))
+                        prev.map((x) => (x.id === habit.id ? { ...x, done: Math.max(0, x.done + n) } : x))
                       )
                     }
+                    menuOpen={menuOpenId === habit.id}
+                    onMenuToggle={() => setMenuOpenId(menuOpenId === habit.id ? null : habit.id)}
+                    onEdit={() => setEditHabit(habit)}
+                    onDuplicate={() => duplicateHabit(habit)}
+                    onArchive={() => archiveHabit(habit.id)}
+                    onDelete={() => deleteHabit(habit.id)}
+                    onStartTimer={() => setTimerHabit({ habit, date: selectedDate })}
                   />
                 ))}
               </div>
             )}
-            {/* 1 Success section */}
+            {/* Success section */}
             {filteredHabits.filter((h) => h.done >= h.goal).length > 0 && (
               <div>
                 <h3 className="mb-2 text-sm font-semibold text-[#111827]">
                   {filteredHabits.filter((h) => h.done >= h.goal).length} Success
                 </h3>
                 {filteredHabits.filter((h) => h.done >= h.goal).map((habit) => (
-                  <HabitRow
+                  <EnhancedHabitRow
                     key={habit.id}
                     habit={habit}
+                    streak={streakData[habit.id]}
                     selected={selectedIds.has(habit.id)}
+                    completed
                     onToggleSelect={() => toggleSelect(habit.id)}
                     onAddTimes={(n) =>
                       setHabits((prev) =>
-                        prev.map((x) => (x.id === habit.id ? { ...x, goal: Math.max(1, x.goal + n) } : x))
+                        prev.map((x) => (x.id === habit.id ? { ...x, done: Math.max(0, x.done + n) } : x))
                       )
                     }
-                    completed
+                    menuOpen={menuOpenId === habit.id}
+                    onMenuToggle={() => setMenuOpenId(menuOpenId === habit.id ? null : habit.id)}
+                    onEdit={() => setEditHabit(habit)}
+                    onDuplicate={() => duplicateHabit(habit)}
+                    onArchive={() => archiveHabit(habit.id)}
+                    onDelete={() => deleteHabit(habit.id)}
+                    onStartTimer={() => setTimerHabit({ habit, date: selectedDate })}
                   />
                 ))}
               </div>
@@ -434,32 +518,88 @@ export function DashboardContent() {
             </div>
           </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredHabits.map((habit) => (
-              <div
-                key={habit.id}
-                onClick={() => toggleSelect(habit.id)}
-                className={cn(
-                  'cursor-pointer rounded-xl border p-4 transition',
-                  selectedIds.has(habit.id)
-                    ? 'border-[#2a67f4] bg-[#EFF6FF]'
-                    : 'border-[#E5E7EB] bg-white hover:border-[#D1D5DB]'
-                )}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <p className="font-medium text-[#111827]">{habit.name}</p>
-                  <span className={cn(
-                    'flex h-6 w-6 shrink-0 items-center justify-center rounded-full',
-                    selectedIds.has(habit.id) && 'bg-[#2a67f4] text-white',
-                    habit.done >= habit.goal && !selectedIds.has(habit.id) && 'bg-[#10B981] text-white'
-                  )}>
-                    {(selectedIds.has(habit.id) || habit.done >= habit.goal) && <CheckIcon size={14} />}
-                  </span>
-                </div>
-                <p className="mt-1 text-sm text-[#6B7280]">{habit.done}/{habit.goal} times</p>
+          /* Journal grid: rows = habits, columns = dates */
+          (() => {
+            const daysCount = dateRangePreset === 'week' ? 7 : 31;
+            const end = new Date(selectedDate);
+            const gridDates: Date[] = [];
+            for (let i = daysCount - 1; i >= 0; i--) {
+              const d = new Date(end);
+              d.setDate(d.getDate() - i);
+              gridDates.push(d);
+            }
+            return (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr>
+                      <th className="border border-[#E5E7EB] bg-[#F9FAFB] px-2 py-2 text-left font-medium text-[#111827] sticky left-0 z-10 min-w-[140px]">
+                        Habit
+                      </th>
+                      {gridDates.map((d) => (
+                        <th
+                          key={d.toISOString()}
+                          className={cn(
+                            'border border-[#E5E7EB] px-1 py-2 text-center font-medium min-w-[2.5rem]',
+                            isToday(d) ? 'bg-[#2a67f4] text-white' : 'bg-[#F9FAFB] text-[#6B7280]'
+                          )}
+                        >
+                          <span className="block text-[10px]">{DAYS[d.getDay()]}</span>
+                          <span className="block text-xs">{d.getDate()}</span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredHabits.map((habit) => (
+                      <tr key={habit.id}>
+                        <td className="border border-[#E5E7EB] bg-white px-2 py-1.5 sticky left-0 font-medium text-[#111827]">
+                          {habit.name}
+                        </td>
+                        {gridDates.map((d) => {
+                          const log = getLog(habit.id, d);
+                          const note = getNote(habit.id, d);
+                          const popover = cellPopover?.habitId === habit.id && cellPopover?.date.getTime() === d.getTime();
+                          return (
+                            <td
+                              key={d.toISOString()}
+                              className="border border-[#E5E7EB] p-0 align-middle"
+                            >
+                              <div className="relative flex items-center justify-center min-h-[2.5rem]">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCellEditor({ habitId: habit.id, date: d });
+                                  }}
+                                  className={cn(
+                                    'h-full min-w-[2.5rem] rounded transition',
+                                    log?.status === 'completed' && 'bg-[#10B981] text-white',
+                                    log?.status === 'skipped' && 'bg-[#F59E0B]/30 text-[#B45309]',
+                                    log?.status === 'missed' && 'bg-[#EF4444]/20 text-[#DC2626]',
+                                    !log && 'hover:bg-[#F3F4F6] text-[#9CA3AF]'
+                                  )}
+                                  title={log ? 'Click to edit' : 'Mark complete'}
+                                >
+                                  {log?.status === 'completed' && <CheckIcon size={16} />}
+                                  {log?.status === 'skipped' && <span>−</span>}
+                                  {log?.value != null && <span className="text-[10px]">{log.value}</span>}
+                                </button>
+                                {note && (
+                                  <span className="absolute bottom-0 right-0 text-[10px] text-[#6B7280]" title={note}>
+                                    <FileTextIcon size={10} />
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            ))}
-          </div>
+            );
+          })()
         )}
       </div>
 
@@ -522,11 +662,51 @@ export function DashboardContent() {
         </div>
       </div>
 
-      <NewHabitModal
+      <NewHabitModal areas={areas}
         open={newHabitOpen}
         onOpenChange={setNewHabitOpen}
         onSave={handleSaveHabit}
       />
+      <EditHabitModal habit={editHabit} onClose={() => setEditHabit(null)} onSave={handleUpdateHabit} areas={areas} />
+
+      {/* Cell Editor Modal */}
+      {cellEditor && habits.find((h) => h.id === cellEditor.habitId) && (
+        <HabitCellEditor
+          habitId={cellEditor.habitId}
+          habitName={habits.find((h) => h.id === cellEditor.habitId)?.name || ''}
+          habitType={habits.find((h) => h.id === cellEditor.habitId)?.type || 'checkbox'}
+          habitUnit={habits.find((h) => h.id === cellEditor.habitId)?.unit}
+          date={cellEditor.date}
+          initialEntry={habitLogs[logKey(cellEditor.habitId, cellEditor.date)]}
+          onSave={(entry) => {
+            if (entry) {
+              setLog(cellEditor.habitId, cellEditor.date, entry);
+            } else {
+              setLog(cellEditor.habitId, cellEditor.date, null);
+              setNote(cellEditor.habitId, cellEditor.date, '');
+            }
+            setCellEditor(null);
+          }}
+          onCancel={() => setCellEditor(null)}
+        />
+      )}
+
+      {/* Timer Modal */}
+      {timerHabit && (
+        <HabitTimer
+          habitName={timerHabit.habit.name}
+          initialSeconds={habitLogs[logKey(timerHabit.habit.id, timerHabit.date)]?.durationMinutes ? habitLogs[logKey(timerHabit.habit.id, timerHabit.date)].durationMinutes! * 60 : 0}
+          onSave={(durationSeconds) => {
+            const durationMinutes = Math.round(durationSeconds / 60);
+            setLog(timerHabit.habit.id, timerHabit.date, {
+              status: 'completed',
+              durationMinutes,
+            });
+            setTimerHabit(null);
+          }}
+          onCancel={() => setTimerHabit(null)}
+        />
+      )}
     </div>
   );
 }

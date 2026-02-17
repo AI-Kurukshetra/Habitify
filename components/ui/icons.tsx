@@ -325,3 +325,87 @@ export function MenuIcon(props: IconProps) {
   );
 }
 
+export function BarChartIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M3 3v18h18" />
+      <path d="M7 16v-5" />
+      <path d="M12 16v-9" />
+      <path d="M17 16v-2" />
+    </IconBase>
+  );
+}
+
+export function ArchiveIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M21 8v13H3V8" />
+      <path d="M1 3h22v5H1z" />
+      <path d="M10 12h4" />
+    </IconBase>
+  );
+}
+
+export function CopyIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </IconBase>
+  );
+}
+
+export function FileTextIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+      <path d="M16 13H8" />
+      <path d="M16 17H8" />
+      <path d="M10 9H8" />
+    </IconBase>
+  );
+}
+
+export function TimerIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 6v6l4 2" />
+    </IconBase>
+  );
+}
+
+export function BookOpenIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+    </IconBase>
+  );
+}
+
+export function FlameIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
+    </IconBase>
+  );
+}
+
+export function PlayIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <polygon points="5 3 19 12 5 21 5 3" fill="currentColor" stroke="none" />
+    </IconBase>
+  );
+}
+
+export function StopIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <rect x="4" y="4" width="16" height="16" fill="currentColor" stroke="none" />
+    </IconBase>
+  );
+}
+

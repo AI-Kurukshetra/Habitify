@@ -6,49 +6,21 @@ import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import {
   ChevronDownIcon,
-  SunIcon,
-  MoonIcon,
+  CalendarIcon,
+  BookOpenIcon,
   FolderOpenIcon,
   PlusIcon,
   InfinityIcon,
   SettingsIcon,
-  CreditCardIcon,
-  LinkIcon,
-  ListIcon,
+  BarChartIcon,
   UserIcon,
   LogOutIcon,
-  RunIcon,
-  WrenchIcon,
+  SunIcon,
+  MoonIcon,
 } from '@/components/ui/icons';
+import { useDashboard } from '@/contexts/DashboardContext';
 
 const SIDEBAR_BG = '#F7F8FA';
-const ACTIVE_BG = '#2a67f4';
-
-type SidebarSection = {
-  id: string;
-  label: string;
-  items: { href: string; label: string; icon: React.ReactNode; badge?: string }[];
-};
-
-const timeOfDayItems = [
-  { href: '/dashboard?filter=snacks', label: 'Snacks Time', icon: <SunIcon size={16} /> },
-  { href: '/dashboard?filter=morning', label: 'Morning', icon: <SunIcon size={16} /> },
-  { href: '/dashboard?filter=afternoon', label: 'Afternoon', icon: <SunIcon size={16} /> },
-  { href: '/dashboard?filter=evening', label: 'Evening', icon: <MoonIcon size={16} />, badge: '• now' },
-];
-
-const areasItems = [
-  { href: '/dashboard?area=todo', label: 'todo list', icon: <FolderOpenIcon size={16} /> },
-  { href: '/dashboard?new=area', label: '+ New Area', icon: <PlusIcon size={16} /> },
-];
-
-const preferencesItems = [
-  { href: '/dashboard/habits', label: 'Habits', icon: <InfinityIcon size={16} /> },
-  { href: '/dashboard/off-mode', label: 'Off Mode', icon: <span className="text-base">⏻</span> },
-  { href: '/dashboard/payment', label: 'Payment', icon: <CreditCardIcon size={16} /> },
-  { href: '/dashboard/settings', label: 'App Settings', icon: <SettingsIcon size={16} /> },
-  { href: '/dashboard/resources', label: 'Resources', icon: <LinkIcon size={16} /> },
-];
 
 function CollapsibleSection({
   title,
@@ -60,7 +32,6 @@ function CollapsibleSection({
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-
   return (
     <div className="border-b border-[#E5E7EB] pb-2">
       <button
@@ -69,16 +40,9 @@ function CollapsibleSection({
         className="flex w-full items-center justify-between gap-2 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-[#6B7280]"
       >
         <span>{title}</span>
-        <ChevronDownIcon
-          size={14}
-          className={cn('shrink-0 transition-transform', !open && '-rotate-90')}
-        />
+        <ChevronDownIcon size={14} className={cn('shrink-0 transition-transform', !open && '-rotate-90')} />
       </button>
-      {open ? (
-        <nav className="mt-1 space-y-0.5" aria-label={title}>
-          {children}
-        </nav>
-      ) : null}
+      {open ? <nav className="mt-1 space-y-0.5" aria-label={title}>{children}</nav> : null}
     </div>
   );
 }
@@ -87,33 +51,27 @@ function SidebarLink({
   href,
   label,
   icon,
-  badge,
   active,
+  badge,
 }: {
   href: string;
   label: string;
   icon: React.ReactNode;
-  badge?: string;
   active: boolean;
+  badge?: string;
 }) {
   return (
     <Link
       href={href}
       className={cn(
         'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition',
-        active
-          ? 'bg-[#2a67f4] text-white'
-          : 'text-[#374151] hover:bg-[#E5E7EB] hover:text-[#111827]'
+        active ? 'bg-[#2a67f4] text-white' : 'text-[#374151] hover:bg-[#E5E7EB] hover:text-[#111827]'
       )}
       onClick={() => typeof window !== 'undefined' && (window as any).__closeSidebar?.()}
     >
       <span className={cn('shrink-0', !active && 'text-[#6B7280]')}>{icon}</span>
       <span className="min-w-0 truncate">{label}</span>
-      {badge ? (
-        <span className="ml-auto shrink-0 text-xs font-medium text-[#2a67f4]">
-          {badge}
-        </span>
-      ) : null}
+      {badge ? <span className="ml-auto shrink-0 text-xs font-medium text-[#2a67f4]">{badge}</span> : null}
     </Link>
   );
 }
@@ -129,15 +87,15 @@ export function DashboardSidebar({
   const basePath = pathname?.split('?')[0] ?? '';
   const [popoverOpen, setPopoverOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const { areas, setNewAreaModalOpen } = useDashboard();
 
-  const isAllHabits = basePath === '/dashboard' || basePath === '/crud-test';
   const displayLabel = userLabel && userLabel !== 'Guest' ? userLabel : 'Guest';
+  const isAreaRoute = basePath.startsWith('/dashboard/area/');
+  const activeAreaId = isAreaRoute ? basePath.replace('/dashboard/area/', '') : null;
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        setPopoverOpen(false);
-      }
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) setPopoverOpen(false);
     };
     if (popoverOpen) {
       document.addEventListener('mousedown', handleClickOutside);
@@ -150,7 +108,7 @@ export function DashboardSidebar({
       className="flex h-full w-full flex-col border-r border-[#E5E7EB] bg-[#F7F8FA] lg:w-[260px] lg:shrink-0"
       style={{ backgroundColor: SIDEBAR_BG }}
     >
-      {/* Profile / Sign out popover at top */}
+      {/* Profile */}
       <div className="relative border-b border-[#E5E7EB] px-4 py-3" ref={popoverRef}>
         <button
           type="button"
@@ -165,93 +123,72 @@ export function DashboardSidebar({
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-[#111827]">{displayLabel}</p>
           </div>
-          <ChevronDownIcon
-            size={16}
-            className={cn('shrink-0 text-[#6B7280] transition-transform', popoverOpen && 'rotate-180')}
-          />
+          <ChevronDownIcon size={16} className={cn('shrink-0 text-[#6B7280] transition-transform', popoverOpen && 'rotate-180')} />
         </button>
         {popoverOpen && (
           <div className="absolute left-2 right-2 top-full z-50 mt-1 rounded-lg border border-[#E5E7EB] bg-white py-1 shadow-lg">
-            <Link
-              href="/dashboard/settings"
-              onClick={() => setPopoverOpen(false)}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm text-[#374151] hover:bg-[#F3F4F6]"
-            >
-              <UserIcon size={16} className="text-[#6B7280]" />
-              Profile
+            <Link href="/dashboard/settings" onClick={() => setPopoverOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm text-[#374151] hover:bg-[#F3F4F6]">
+              <UserIcon size={16} className="text-[#6B7280]" /> Profile
             </Link>
-            <button
-              type="button"
-              onClick={() => {
-                setPopoverOpen(false);
-                onSignOut?.();
-              }}
-              className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-[#374151] hover:bg-[#F3F4F6]"
-            >
-              <LogOutIcon size={16} className="text-[#6B7280]" />
-              Sign Out
+            <button type="button" onClick={() => { setPopoverOpen(false); onSignOut?.(); }} className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-[#374151] hover:bg-[#F3F4F6]">
+              <LogOutIcon size={16} className="text-[#6B7280]" /> Sign Out
             </button>
           </div>
         )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-4">
-        {/* All Habits - main nav */}
-        <div className="mb-4">
-          <SidebarLink
-            href="/dashboard"
-            label="All Habits"
-            icon={<FolderOpenIcon size={18} />}
-            active={isAllHabits}
-          />
+        {/* All Habits */}
+        <div className="mb-3">
+          <SidebarLink href="/dashboard" label="All Habits" icon={<BookOpenIcon size={18} />} active={basePath === '/dashboard' && !isAreaRoute} />
+        </div>
+
+        <div className="mb-3">
+          <SidebarLink href="/dashboard/today" label="Today" icon={<CalendarIcon size={18} />} active={basePath === '/dashboard/today'} />
         </div>
 
         <CollapsibleSection title="TIME OF DAY" defaultOpen={true}>
-          {timeOfDayItems.map((item) => (
-            <SidebarLink
-              key={item.href}
-              href={item.href}
-              label={item.label}
-              icon={item.icon}
-              badge={item.badge}
-              active={false}
-            />
-          ))}
+          <SidebarLink href="/dashboard?filter=morning" label="Morning" icon={<SunIcon size={16} />} active={false} />
+          <SidebarLink href="/dashboard?filter=afternoon" label="Afternoon" icon={<SunIcon size={16} />} active={false} />
+          <SidebarLink href="/dashboard?filter=evening" label="Evening" icon={<MoonIcon size={16} />} active={false} badge="• now" />
         </CollapsibleSection>
 
         <CollapsibleSection title="AREAS" defaultOpen={true}>
-          {areasItems.map((item) => (
+          {areas.map((area) => (
             <SidebarLink
-              key={item.href}
-              href={item.href}
-              label={item.label}
-              icon={item.icon}
-              active={false}
+              key={area.id}
+              href={`/dashboard/area/${area.id}`}
+              label={area.name}
+              icon={<FolderOpenIcon size={16} />}
+              active={activeAreaId === area.id}
             />
           ))}
+          <button
+            type="button"
+            onClick={() => { setNewAreaModalOpen(true); typeof window !== 'undefined' && (window as any).__closeSidebar?.(); }}
+            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-[#374151] hover:bg-[#E5E7EB] hover:text-[#111827]"
+          >
+            <PlusIcon size={16} className="shrink-0 text-[#6B7280]" />
+            <span className="min-w-0 truncate">+ New Area</span>
+          </button>
         </CollapsibleSection>
 
         <CollapsibleSection title="PREFERENCES" defaultOpen={true}>
-          {preferencesItems.map((item) => (
-            <SidebarLink
-              key={item.href}
-              href={item.href}
-              label={item.label}
-              icon={item.icon}
-              active={basePath === item.href}
-            />
-          ))}
+          <SidebarLink href="/dashboard/habits" label="Habits" icon={<InfinityIcon size={16} />} active={basePath === '/dashboard/habits'} />
+          <SidebarLink href="/dashboard/areas" label="Areas" icon={<FolderOpenIcon size={16} />} active={basePath === '/dashboard/areas'} />
+          <SidebarLink href="/dashboard/analytics" label="Analytics / Insights" icon={<BarChartIcon size={16} />} active={basePath === '/dashboard/analytics'} />
+          <SidebarLink href="/dashboard/settings" label="App Settings" icon={<SettingsIcon size={16} />} active={basePath === '/dashboard/settings'} />
         </CollapsibleSection>
       </div>
 
       <div className="border-t border-[#E5E7EB] p-3">
         <Link
-          href="/dashboard"
+          href="/dashboard?new=habit"
           className="flex items-center justify-center gap-2 rounded-lg bg-[#2a67f4] px-3 py-2.5 text-sm font-medium text-white hover:bg-[#2360dd]"
-          onClick={() => console.log('Add habit from sidebar')}
+          onClick={() => typeof window !== 'undefined' && (window as any).__closeSidebar?.()}
         >
           <PlusIcon size={18} />
-          + Add habit
+          + New Habit
         </Link>
       </div>
     </aside>
