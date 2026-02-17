@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Next.js Supabase CRUD App",
-  description: "Production-ready full-stack application with Next.js and Supabase",
+  title: "Habitify - Habit Tracking App for Better Daily Routines | iOS, Android & Web",
+  description: "Transform your life with Habitify, the beautiful habit tracking app. Build lasting habits, track progress, and achieve your goals. Available on iPhone, iPad, Mac, Windows, Web, Android.",
 };
 
 export default function RootLayout({
@@ -13,7 +13,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased bg-gray-50">
+      <body className="antialiased">
         {children}
       </body>
     </html>

@@ -1,3 +1,49 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    --color-primary: #2a67f4;
+    --color-primary-fg: #fff;
+    --color-fg: #0f172a;
+    --color-muted: #64748b;
+    --color-border: #e2e8f0;
+    --color-card: #ffffff;
+    --color-bg: #f8fafc;
+    --color-danger: #dc2626;
+    --color-danger-fg: #fff;
+    --font-display: "Inter", system-ui, sans-serif;
+  }
+  body {
+    @apply antialiased text-fg bg-bg;
+  }
+}
+
+.text-gradient {
+  background: linear-gradient(97.07deg, #2a67f4 41.4%, #e412cf 119.01%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.app-bg {
+  background-color: var(--color-bg);
+}
+
+/* Habitify-style hover: cards lift + shadow */
+.hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.08);
+}
+
+/* Buttons: shadow increase on hover */
+.btn-hover-shadow {
+  transition: box-shadow 0.2s ease, opacity 0.2s ease;
+}
+.btn-hover-shadow:hover {
+  box-shadow: 0 6px 16px rgba(42, 103, 244, 0.25);
+}
