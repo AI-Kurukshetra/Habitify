@@ -44,7 +44,12 @@ export async function middleware(request: NextRequest) {
   }
 
   // Redirect authenticated users away from auth pages
-  if ((request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup') && user) {
+  if (
+    (request.nextUrl.pathname === '/login' ||
+      request.nextUrl.pathname === '/signup' ||
+      request.nextUrl.pathname === '/forgot-password') &&
+    user
+  ) {
     const redirectUrl = new URL('/dashboard', request.url);
     return NextResponse.redirect(redirectUrl);
   }
@@ -53,5 +58,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/crud-test/:path*', '/login', '/signup'],
+  matcher: ['/dashboard/:path*', '/crud-test/:path*', '/login', '/signup', '/forgot-password'],
 };

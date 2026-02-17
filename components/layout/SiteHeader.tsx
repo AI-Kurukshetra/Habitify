@@ -70,24 +70,18 @@ export function SiteHeader() {
           })}
         </nav>
         <div className="hidden items-center gap-2 md:flex">
-          <a
-            href="https://app.habitify.me/signin"
-            target="_blank"
-            rel="noreferrer"
+          <Link
+            href="/login"
             className="rounded-xl px-3 py-2 text-sm font-medium text-muted transition-colors hover:text-fg"
-            onClick={() => console.log('Sign In')}
           >
             Sign In
-          </a>
-          <a
-            href="https://app.habitify.me/signup"
-            target="_blank"
-            rel="noreferrer"
+          </Link>
+          <Link
+            href="/signup"
             className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-shadow hover:shadow-[0_6px_16px_rgba(42,103,244,0.25)]"
-            onClick={() => console.log('Sign Up')}
           >
             Sign Up
-          </a>
+          </Link>
         </div>
 
         <button
@@ -134,24 +128,20 @@ export function SiteHeader() {
               );
             })}
             <div className="mt-2 flex flex-col gap-1 border-t border-border/60 pt-3">
-              <a
-                href="https://app.habitify.me/signin"
-                target="_blank"
-                rel="noreferrer"
+              <Link
+                href="/login"
                 className="rounded-xl px-3 py-2 text-sm font-medium text-muted hover:bg-bg hover:text-fg"
                 onClick={() => setOpen(false)}
               >
                 Sign In
-              </a>
-              <a
-                href="https://app.habitify.me/signup"
-                target="_blank"
-                rel="noreferrer"
+              </Link>
+              <Link
+                href="/signup"
                 className="rounded-xl bg-primary px-3 py-2 text-center text-sm font-medium text-primary-fg"
                 onClick={() => setOpen(false)}
               >
                 Sign Up
-              </a>
+              </Link>
             </div>
           </nav>
         </div>
