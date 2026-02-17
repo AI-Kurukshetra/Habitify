@@ -1,6 +1,6 @@
-# Step 2: Deploy to Vercel
+#  Deploy to Vercel
 
-## Option A: Deploy via Vercel Website (Easiest)
+## Deploy via Vercel Website (Easiest)
 
 1. **Go to [vercel.com](https://vercel.com)**
 2. **Sign Up or Log In** (use GitHub for easiest integration)
@@ -23,7 +23,7 @@
      ```
      NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
      NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
-     SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+     NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET=your_supabase_bucket
      SUPABASE_MANAGEMENT_API_TOKEN=your_management_token
      ```
 
